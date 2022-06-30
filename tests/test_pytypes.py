@@ -734,3 +734,16 @@ def test_populate_obj_str_attrs():
     new_attrs = {k: v for k, v in new_o.__dict__.items() if not k.startswith("_")}
     assert all(isinstance(v, str) for v in new_attrs.values())
     assert len(new_attrs) == pop
+
+
+def test_handle_empty_after_dec_ref():
+    assert m.handle_empty_after_dec_ref()
+
+
+def test_slice_object_to_handle_throws():
+    if hasattr(m, "slice_object_to_handle"):
+        with pytest.raises(ReferenceError) as exc_info:
+            m.slice_object_to_handle()
+        assert str(exc_info.value) == "Created handle to dangling object of type 'list'!"
+    else:
+        pytest.skip("Not defined: PYBIND11_HANDLE_REF_DEBUG")

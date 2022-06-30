@@ -695,4 +695,18 @@ TEST_SUBMODULE(pytypes, m) {
         }
         return o;
     });
+
+    m.def("handle_empty_after_dec_ref", []() {
+        py::object o = py::list();
+        py::handle h = o.release();
+        h.dec_ref();
+        return py::cast(not h);
+    });
+#ifdef PYBIND11_HANDLE_REF_DEBUG
+    m.def("slice_object_to_handle", []() {
+        py::object o = py::list();
+        py::handle h = [](py::object o) -> py::handle { return o; }(std::move(o));
+        h = py::handle();
+    });
+#endif
 }

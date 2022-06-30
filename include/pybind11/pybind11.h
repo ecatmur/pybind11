@@ -2203,7 +2203,7 @@ PYBIND11_NOINLINE void keep_alive_impl(handle nurse, handle patient) {
         /* Fall back to clever approach based on weak references taken from
          * Boost.Python. This is not used for pybind-registered types because
          * the objects can be destroyed out-of-order in a GC pass. */
-        cpp_function disable_lifesupport([patient](handle weakref) {
+        cpp_function disable_lifesupport([patient](handle weakref) mutable {
             patient.dec_ref();
             weakref.dec_ref();
         });

@@ -934,6 +934,7 @@ PYBIND11_RUNTIME_EXCEPTION(cast_error, PyExc_RuntimeError) /// Thrown when pybin
                                                            /// handle::call fail due to a type
                                                            /// casting error
 PYBIND11_RUNTIME_EXCEPTION(reference_cast_error, PyExc_RuntimeError) /// Used internally
+PYBIND11_RUNTIME_EXCEPTION(reference_error, PyExc_ReferenceError) /// Used internally
 
 [[noreturn]] PYBIND11_NOINLINE void pybind11_fail(const char *reason) {
     assert(!PyErr_Occurred());

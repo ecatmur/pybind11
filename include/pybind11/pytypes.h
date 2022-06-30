@@ -215,6 +215,18 @@ public:
     // NOLINTNEXTLINE(google-explicit-constructor)
     handle(PyObject *ptr) : m_ptr(ptr) {} // Allow implicit conversion from PyObject*
 
+#ifdef PYBIND11_HANDLE_REF_DEBUG
+    handle(object&&) noexcept;
+    handle(const object&) noexcept;
+    handle(const handle& rhs) noexcept : m_ptr(rhs.m_ptr), m_stolen(false) {}
+    handle& operator=(const handle& rhs) noexcept(false) {
+        release_stolen_ptr();
+        m_ptr = rhs.m_ptr;
+        return *this;
+    }
+    ~handle() noexcept(false) { release_stolen_ptr(); }
+#endif
+
     /// Return the underlying ``PyObject *`` pointer
     PyObject *ptr() const { return m_ptr; }
     PyObject *&ptr() { return m_ptr; }
@@ -233,12 +245,17 @@ public:
     }
 
     /** \rst
-        Manually decrease the reference count of the Python object. Usually, it is
-        preferable to use the `object` class which derives from `handle` and calls
-        this function automatically. Returns a reference to itself.
+        Manually decrease the reference count of the Python object, clearing the
+        handle if the object is deallocated (which is why this function is not
+        `const`). Usually, it is preferable to use the `object` class which
+        derives from `handle` and calls this function automatically. Returns a
+        reference to itself.
     \endrst */
-    const handle &dec_ref() const & {
-        Py_XDECREF(m_ptr);
+    const handle &dec_ref() & {
+        if (m_ptr && ref_count() == 1)
+            Py_CLEAR(m_ptr);
+        else
+            Py_XDECREF(m_ptr);
         return *this;
     }
 
@@ -272,6 +289,9 @@ private:
         return counter;
     }
 
+    void release_stolen_ptr() noexcept(false);
+    bool m_stolen = false;
+
 public:
     static std::size_t inc_ref_counter() { return inc_ref_counter(0); }
 #endif
@@ -301,7 +321,7 @@ public:
     /// Move constructor; steals the object from ``other`` and preserves its reference count
     object(object &&other) noexcept : handle(other) { other.m_ptr = nullptr; }
     /// Destructor; automatically calls `handle::dec_ref()`
-    ~object() { dec_ref(); }
+    ~object() noexcept { dec_ref(); }
 
     /** \rst
         Resets the internal pointer to ``nullptr`` without decreasing the
@@ -358,6 +378,16 @@ public:
     object(handle h, borrowed_t) : handle(h) { inc_ref(); }
     object(handle h, stolen_t) : handle(h) {}
 };
+
+#ifdef PYBIND11_HANDLE_REF_DEBUG
+inline handle::handle(object const& o) noexcept : handle(o.ptr()) {}
+inline handle::handle(object&& o) noexcept : handle(o.ptr()) {
+    if (m_ptr && ref_count() == 1) {
+        o.release();
+        m_stolen = true;
+    }
+}
+#endif
 
 /** \rst
     Declare that a `handle` or ``PyObject *`` is a certain type and borrow the reference.
@@ -2259,6 +2289,20 @@ inline iterator iter(handle obj) {
     return reinterpret_steal<iterator>(result);
 }
 /// @} python_builtins
+
+#ifdef PYBIND11_HANDLE_REF_DEBUG
+inline void handle::release_stolen_ptr() noexcept(false) {
+    if (m_stolen) {
+        m_stolen = false;
+        auto obj = reinterpret_steal<object>(*this);
+        if (obj && obj.ref_count() == 1) {
+            throw reference_error("Created handle to dangling object of type '"
+                                  + detail::get_fully_qualified_tp_name(Py_TYPE(obj.ptr()))
+                                  + "'!");
+        }
+    }
+}
+#endif
 
 PYBIND11_NAMESPACE_BEGIN(detail)
 template <typename D>
